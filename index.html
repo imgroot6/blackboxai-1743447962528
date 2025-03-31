@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Date App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .heartbeat {
+            animation: heartbeat 1.5s ease-in-out infinite;
+        }
+        @keyframes heartbeat {
+            0% { transform: scale(1); }
+            25% { transform: scale(1.1); }
+            50% { transform: scale(1); }
+            75% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-pink-500 to-red-500 min-h-screen flex items-center justify-center">
+    <div class="bg-white/20 backdrop-blur-md rounded-3xl p-8 shadow-2xl w-full max-w-md">
+        <div class="text-center mb-8">
+            <i class="fas fa-heart text-6xl text-white heartbeat"></i>
+            <h1 class="text-3xl font-bold text-white mt-4">Virtual Date</h1>
+        </div>
+        
+        <div class="space-y-6">
+            <div>
+                <label class="block text-white font-medium mb-2">Enter 6-digit PIN</label>
+                <input type="text" id="pinInput" maxlength="6" pattern="\d{6}" 
+                       class="w-full px-4 py-3 rounded-lg text-2xl text-center font-mono tracking-widest">
+            </div>
+            
+            <button id="joinBtn" class="w-full bg-white text-pink-600 py-3 rounded-lg font-bold hover:bg-pink-100 transition">
+                <i class="fas fa-heart mr-2"></i> Join Date
+            </button>
+            
+            <button id="createBtn" class="w-full bg-pink-600 text-white py-3 rounded-lg font-bold hover:bg-pink-700 transition">
+                <i class="fas fa-plus mr-2"></i> Create New Date
+            </button>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('createBtn').addEventListener('click', () => {
+            const pin = Math.floor(100000 + Math.random() * 900000);
+            document.getElementById('pinInput').value = pin;
+            alert(`Your date PIN: ${pin}\nShare this with your partner!`);
+        });
+
+        document.getElementById('joinBtn').addEventListener('click', () => {
+            const pin = document.getElementById('pinInput').value;
+            if (/^\d{6}$/.test(pin)) {
+                window.location.href = `video-call.html?pin=${pin}`;
+            } else {
+                alert('Please enter a valid 6-digit PIN');
+            }
+        });
+    </script>
+</body>
+</html>

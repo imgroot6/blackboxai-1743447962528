@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Date - Games</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            opacity: 0;
+        }
+        @keyframes confetti-fall {
+            0% { transform: translateY(-100px) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+        }
+        .card {
+            transition: all 0.3s ease;
+            transform-style: preserve-3d;
+        }
+        .card.flipped {
+            transform: rotateY(180deg);
+        }
+        .card-face {
+            backface-visibility: hidden;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+        .card-back {
+            transform: rotateY(180deg);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="flex flex-col h-screen">
+        <!-- Game Selection -->
+        <div class="p-6 text-center">
+            <h1 class="text-3xl font-bold mb-6">
+                <i class="fas fa-gamepad text-pink-500 mr-2"></i>
+                Couple Games
+            </h1>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+                <!-- Trivia Game -->
+                <div class="bg-gray-800 rounded-xl p-6 hover:bg-gray-700 transition cursor-pointer" onclick="startGame('trivia')">
+                    <div class="text-5xl mb-4 text-pink-500">
+                        <i class="fas fa-question-circle"></i>
+                    </div>
+                    <h2 class="text-xl font-bold mb-2">Love Trivia</h2>
+                    <p class="text-gray-400">Test how well you know each other with fun questions</p>
+                </div>
+                
+                <!-- Memory Game -->
+                <div class="bg-gray-800 rounded-xl p-6 hover:bg-gray-700 transition cursor-pointer" onclick="startGame('memory')">
+                    <div class="text-5xl mb-4 text-pink-500">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <h2 class="text-xl font-bold mb-2">Memory Match</h2>
+                    <p class="text-gray-400">Find matching pairs of romantic images</p>
+                </div>
+                
+                <!-- Would You Rather -->
+                <div class="bg-gray-800 rounded-xl p-6 hover:bg-gray-700 transition cursor-pointer" onclick="startGame('rather')">
+                    <div class="text-5xl mb-4 text-pink-500">
+                        <i class="fas fa-balance-scale"></i>
+                    </div>
+                    <h2 class="text-xl font-bold mb-2">Would You Rather</h2>
+                    <p class="text-gray-400">Fun dilemmas to learn more about each other</p>
+                </div>
+                
+                <!-- Truth or Dare -->
+                <div class="bg-gray-800 rounded-xl p-6 hover:bg-gray-700 transition cursor-pointer" onclick="startGame('dare')">
+                    <div class="text-5xl mb-4 text-pink-500">
+                        <i class="fas fa-grin-tongue-wink"></i>
+                    </div>
+                    <h2 class="text-xl font-bold mb-2">Truth or Dare</h2>
+                    <p class="text-gray-400">Romantic and fun challenges for couples</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Game Area (hidden by default) -->
+        <div id="gameArea" class="hidden flex-grow p-6">
+            <div class="max-w-4xl mx-auto h-full flex flex-col">
+                <!-- Game Header -->
+                <div class="flex justify-between items-center mb-6">
+                    <button id="backBtn" class="text-pink-500 hover:text-pink-400">
+                        <i class="fas fa-arrow-left mr-2"></i> Back to Games
+                    </button>
+                    <div id="scoreDisplay" class="bg-gray-800 px-4 py-2 rounded-lg">
+                        Score: <span id="score">0</span>
+                    </div>
+                </div>
+                
+                <!-- Game Content -->
+                <div id="gameContent" class="flex-grow flex items-center justify-center">
+                    <!-- Content will be loaded dynamically -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Navigation -->
+        <div class="bg-gray-800 p-2 flex justify-center space-x-4">
+            <button onclick="location.href='video-call.html'" class="text-sm bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition">
+                <i class="fas fa-video mr-2"></i> Video Call
+            </button>
+            <button onclick="location.href='watch-party.html'" class="text-sm bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition">
+                <i class="fas fa-film mr-2"></i> Watch Party
+            </button>
+            <button onclick="location.href='music.html'" class="text-sm bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition">
+                <i class="fas fa-music mr-2"></i> Music
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Game data
+        const games = {
+            trivia: {
+                questions: [
+                    {
+                        question: "What's your partner's favorite color?",
+                        options: ["Red", "Blue", "Green", "Pink"],
+                        answer: 3 // Index of correct answer
+                    },
+                    {
+                        question: "Where did you first meet?",
+                        options: ["School", "Work", "Online", "Party"],
+                        answer: 2
+                    },
+                    {
+                        question: "What's your partner's dream vacation?",
+                        options: ["Beach", "Mountains", "City", "Countryside"],
+                        answer: 0
+                    }
+                ]
+            },
+            memory: {
+                cards: [
+                    { id: 1, emoji: "❤️" },
+                    { id: 2, emoji: "💋" },
+                    { id: 3, emoji: "🌹" },
+                    { id: 4, emoji: "💍" },
+                    { id: 5, emoji: "🍫" },
+                    { id: 6, emoji: "🎶" }
+                ]
+            },
+            rather: {
+                questions: [
+                    "Would you rather have a romantic dinner at home or at a fancy restaurant?",
+                    "Would you rather watch a comedy movie or a romantic movie?",
+                    "Would you rather receive flowers or chocolates?"
+                ]
+            },
+            dare: {
+                truths: [
+                    "What's the most romantic thing you've ever done for someone?",
+                    "What's your idea of a perfect date?",
+                    "What's your favorite memory of us together?"
+                ],
+                dares: [
+                    "Send a romantic poem to your partner",
+                    "Share your favorite photo of us together",
+                    "Describe your partner using only 3 words"
+                ]
+            }
+        };
+
+        // DOM elements
+        const gameArea = document.getElementById('gameArea');
+        const gameContent = document.getElementById('gameContent');
+        const backBtn = document.getElementById('backBtn');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const scoreElement = document.getElementById('score');
+        
+        let currentGame = null;
+        let score = 0;
+        let flippedCards = [];
+        let matchedPairs = 0;
+
+        // Start game
+        function startGame(gameType) {
+            currentGame = gameType;
+            score = 0;
+            scoreElement.textContent = score;
+            
+            document.querySelector('h1').classList.add('hidden');
+            document.querySelector('.grid').classList.add('hidden');
+            gameArea.classList.remove('hidden');
+            
+            switch(gameType) {
+                case 'trivia':
+                    loadTriviaGame();
+                    break;
+                case 'memory':
+                    loadMemoryGame();
+                    break;
+                case 'rather':
+                    loadRatherGame();
+                    break;
+                case 'dare':
+                    loadDareGame();
+                    break;
+            }
+        }
+
+        // Back to game selection
+        backBtn.addEventListener('click', () => {
+            gameArea.classList.add('hidden');
+            document.querySelector('h1').classList.remove('hidden');
+            document.querySelector('.grid').classList.remove('hidden');
+        });
+
+        // Load Trivia Game
+        function loadTriviaGame() {
+            gameContent.innerHTML = `
+                <div class="w-full max-w-md">
+                    <div id="triviaQuestion" class="bg-gray-800 p-6 rounded-lg mb-6 text-xl"></div>
+                    <div id="triviaOptions" class="space-y-3"></div>
+                </div>
+            `;
+            
+            const questionEl = document.getElementById('triviaQuestion');
+            const optionsEl = document.getElementById('triviaOptions');
+            let currentQuestion = 0;
+            
+            function showQuestion() {
+                if (currentQuestion >= games.trivia.questions.length) {
+                    gameContent.innerHTML = `
+                        <div class="text-center">
+                            <h2 class="text-2xl font-bold mb-4">Game Over!</h2>
+                            <p class="text-xl mb-6">Your final score: ${score}/${games.trivia.questions.length}</p>
+                            ${score === games.trivia.questions.length ? createConfetti() : ''}
+                            <button onclick="startGame('trivia')" class="bg-pink-600 hover:bg-pink-700 px-6 py-3 rounded-lg">
+                                Play Again
+                            </button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const question = games.trivia.questions[currentQuestion];
+                questionEl.textContent = question.question;
+                optionsEl.innerHTML = '';
+                
+                question.options.forEach((option, index) => {
+                    const button = document.createElement('button');
+                    button.className = 'w-full bg-gray-700 hover:bg-gray-600 p-4 rounded-lg text-left transition';
+                    button.textContent = option;
+                    button.addEventListener('click', () => {
+                        if (index === question.answer) {
+                            button.classList.add('bg-green-600');
+                            score++;
+                            scoreElement.textContent = score;
+                        } else {
+                            button.classList.add('bg-red-600');
+                        }
+                        setTimeout(() => {
+                            currentQuestion++;
+                            showQuestion();
+                        }, 1000);
+                    });
+                    optionsEl.appendChild(button);
+                });
+            }
+            
+            showQuestion();
+        }
+
+        // Load Memory Game
+        function loadMemoryGame() {
+            // Duplicate cards to create pairs
+            const cards = [...games.memory.cards, ...games.memory.cards];
+            // Shuffle cards
+            cards.sort(() => Math.random() - 0.5);
+            
+            gameContent.innerHTML = `
+                <div class="grid grid-cols-3 md:grid-cols-4 gap-4 w-full max-w-md">
+                    ${cards.map((card, index) => `
+                        <div class="card aspect-square cursor-pointer" data-index="${index}" data-id="${card.id}">
+                            <div class="card-face bg-pink-600 rounded-lg flex items-center justify-center text-4xl">
+                                <i class="fas fa-question"></i>
+                            </div>
+                            <div class="card-face card-back bg-gray-700 rounded-lg flex items-center justify-center text-4xl">
+                                ${card.emoji}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            const cardElements = document.querySelectorAll('.card');
+            flippedCards = [];
+            matchedPairs = 0;
+            
+            cardElements.forEach(card => {
+                card.addEventListener('click', () => {
+                    if (flippedCards.length < 2 && !card.classList.contains('flipped')) {
+                        card.classList.add('flipped');
+                        flippedCards.push(card);
+                        
+                        if (flippedCards.length === 2) {
+                            const [card1, card2] = flippedCards;
+                            if (card1.dataset.id === card2.dataset.id) {
+                                // Match found
+                                matchedPairs++;
+                                if (matchedPairs === games.memory.cards.length) {
+                                    // Game over
+                                    setTimeout(() => {
+                                        gameContent.innerHTML = `
+                                            <div class="text-center">
+                                                <h2 class="text-2xl font-bold mb-4">You Win!</h2>
+                                                <p class="text-xl mb-6">You found all ${games.memory.cards.length} pairs!</p>
+                                                ${createConfetti()}
+                                                <button onclick="startGame('memory')" class="bg-pink-600 hover:bg-pink-700 px-6 py-3 rounded-lg">
+                                                    Play Again
+                                                </button>
+                                            </div>
+                                        `;
+                                    }, 1000);
+                                }
+                                flippedCards = [];
+                            } else {
+                                // No match
+                                setTimeout(() => {
+                                    card1.classList.remove('flipped');
+                                    card2.classList.remove('flipped');
+                                    flippedCards = [];
+                                }, 1000);
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+        // Load Would You Rather Game
+        function loadRatherGame() {
+            let currentQuestion = 0;
+            
+            function showQuestion() {
+                if (currentQuestion >= games.rather.questions.length) {
+                    gameContent.innerHTML = `
+                        <div class="text-center">
+                            <h2 class="text-2xl font-bold mb-4">Game Over!</h2>
+                            <p class="text-xl mb-6">You answered all questions!</p>
+                            <button onclick="startGame('rather')" class="bg-pink-600 hover:bg-pink-700 px-6 py-3 rounded-lg">
+                                Play Again
+                            </button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                gameContent.innerHTML = `
+                    <div class="w-full max-w-md text-center">
+                        <div class="bg-gray-800 p-6 rounded-lg mb-8 text-xl">
+                            ${games.rather.questions[currentQuestion]}
+                        </div>
+                        <div class="flex justify-center space-x-4">
+                            <button class="choice bg-green-600 hover:bg-green-700 px-6 py-3 rounded-lg">
+                                Option 1
+                            </button>
+                            <button class="choice bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg">
+                                Option 2
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                document.querySelectorAll('.choice').forEach(button => {
+                    button.addEventListener('click', () => {
+                        currentQuestion++;
+                        showQuestion();
+                    });
+                });
+            }
+            
+            showQuestion();
+        }
+
+        // Load Truth or Dare Game
+        function loadDareGame() {
+            gameContent.innerHTML = `
+                <div class="w-full max-w-md text-center">
+                    <div class="bg-gray-800 p-6 rounded-lg mb-8">
+                        <h2 class="text-xl font-bold mb-4">Truth or Dare?</h2>
+                        <div class="flex justify-center space-x-4">
+                            <button id="truthBtn" class="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-lg">
+                                Truth
+                            </button>
+                            <button id="dareBtn" class="bg-yellow-600 hover:bg-yellow-700 px-6 py-3 rounded-lg">
+                                Dare
+                            </button>
+                        </div>
+                    </div>
+                    <div id="challengeDisplay" class="bg-gray-800 p-6 rounded-lg hidden">
+                        <p id="challengeText" class="text-xl mb-4"></p>
+                        <button id="nextBtn" class="bg-pink-600 hover:bg-pink-700 px-6 py-3 rounded-lg">
+                            Next Challenge
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            const truthBtn = document.getElementById('truthBtn');
+            const dareBtn = document.getElementById('dareBtn');
+            const challengeDisplay = document.getElementById('challengeDisplay');
+            const challengeText = document.getElementById('challengeText');
+            const nextBtn = document.getElementById('nextBtn');
+            
+            truthBtn.addEventListener('click', () => {
+                const randomTruth = games.dare.truths[Math.floor(Math.random() * games.dare.truths.length)];
+                challengeText.textContent = randomTruth;
+                challengeDisplay.classList.remove('hidden');
+            });
+            
+            dareBtn.addEventListener('click', () => {
+                const randomDare = games.dare.dares[Math.floor(Math.random() * games.dare.dares.length)];
+                challengeText.textContent = randomDare;
+                challengeDisplay.classList.remove('hidden');
+            });
+            
+            nextBtn.addEventListener('click', () => {
+                challengeDisplay.classList.add('hidden');
+            });
+        }
+
+        // Create confetti effect
+        function createConfetti() {
+            const colors = ['#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6'];
+            let confettiHTML = '';
+            
+            for (let i = 0; i < 50; i++) {
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const left = Math.random() * 100;
+                const animationDuration = Math.random() * 3 + 2;
+                const delay = Math.random() * 5;
+                
+                confettiHTML += `
+                    <div class="confetti" style="
+                        left: ${left}%;
+                        background-color: ${color};
+                        animation: confetti-fall ${animationDuration}s linear ${delay}s infinite;
+                    "></div>
+                `;
+            }
+            
+            return confettiHTML;
+        }
+    </script>
+</body>
+</html>

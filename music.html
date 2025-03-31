@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Date - Music</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .album-art {
+            animation: rotate 20s linear infinite;
+            animation-play-state: paused;
+        }
+        .playing .album-art {
+            animation-play-state: running;
+        }
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .waveform {
+            height: 60px;
+            background: linear-gradient(90deg, #ec4899, #f43f5e);
+            mask-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 20" xmlns="http://www.w3.org/2000/svg"><path d="M0 10 Q 5 5, 10 10 T 20 10 T 30 10 T 40 10 T 50 10 T 60 10 T 70 10 T 80 10 T 90 10 T 100 10" stroke="black" fill="none" stroke-width="2"/></svg>');
+            mask-size: 100% 100%;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="flex flex-col h-screen">
+        <!-- Main Content -->
+        <div class="flex-grow flex flex-col md:flex-row">
+            <!-- Music Player -->
+            <div class="md:w-2/3 p-6 flex flex-col items-center justify-center">
+                <div class="w-64 h-64 rounded-full overflow-hidden shadow-2xl mb-8 album-art">
+                    <img src="https://source.unsplash.com/random/600x600/?love,music" alt="Album Art" class="w-full h-full object-cover">
+                </div>
+                
+                <div class="text-center mb-8 w-full max-w-md">
+                    <h2 id="songTitle" class="text-2xl font-bold mb-1">Our Love Song</h2>
+                    <p id="songArtist" class="text-gray-400">Virtual Date</p>
+                </div>
+                
+                <div class="w-full max-w-md">
+                    <div class="waveform mb-4"></div>
+                    
+                    <div class="flex items-center justify-between mb-6">
+                        <span id="currentTime">0:00</span>
+                        <input type="range" id="progress" min="0" max="100" value="0" class="flex-grow mx-4">
+                        <span id="duration">3:45</span>
+                    </div>
+                    
+                    <div class="flex justify-center space-x-8">
+                        <button id="prevBtn" class="text-2xl hover:text-pink-500 transition">
+                            <i class="fas fa-step-backward"></i>
+                        </button>
+                        <button id="playBtn" class="bg-pink-600 hover:bg-pink-700 w-16 h-16 rounded-full flex items-center justify-center text-2xl transition">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button id="nextBtn" class="text-2xl hover:text-pink-500 transition">
+                            <i class="fas fa-step-forward"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Playlist -->
+            <div class="md:w-1/3 border-l border-gray-700 flex flex-col">
+                <div class="p-4 border-b border-gray-700">
+                    <h3 class="font-bold text-lg flex items-center">
+                        <i class="fas fa-heart mr-2 text-pink-500"></i>
+                        Our Playlist
+                    </h3>
+                </div>
+                <div class="flex-grow overflow-y-auto">
+                    <div id="playlist" class="divide-y divide-gray-700">
+                        <!-- Songs will be added here dynamically -->
+                    </div>
+                </div>
+                <div class="p-4 border-t border-gray-700">
+                    <button id="addSongBtn" class="w-full bg-pink-600 hover:bg-pink-700 py-2 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-plus mr-2"></i> Add Song
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Navigation -->
+        <div class="bg-gray-800 p-2 flex justify-center space-x-4">
+            <button onclick="location.href='video-call.html'" class="text-sm bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition">
+                <i class="fas fa-video mr-2"></i> Video Call
+            </button>
+            <button onclick="location.href='watch-party.html'" class="text-sm bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition">
+                <i class="fas fa-film mr-2"></i> Watch Party
+            </button>
+            <button onclick="location.href='games.html'" class="text-sm bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition">
+                <i class="fas fa-gamepad mr-2"></i> Games
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Sample playlist data
+        const playlist = [
+            { title: "Perfect", artist: "Ed Sheeran", duration: "4:23" },
+            { title: "All of Me", artist: "John Legend", duration: "4:29" },
+            { title: "Thinking Out Loud", artist: "Ed Sheeran", duration: "4:41" },
+            { title: "A Thousand Years", artist: "Christina Perri", duration: "4:45" },
+            { title: "Can't Help Falling in Love", artist: "Elvis Presley", duration: "3:02" }
+        ];
+
+        const playlistEl = document.getElementById('playlist');
+        const songTitle = document.getElementById('songTitle');
+        const songArtist = document.getElementById('songArtist');
+        const playBtn = document.getElementById('playBtn');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const progress = document.getElementById('progress');
+        const currentTime = document.getElementById('currentTime');
+        const duration = document.getElementById('duration');
+        const addSongBtn = document.getElementById('addSongBtn');
+
+        let currentSongIndex = 0;
+        let isPlaying = false;
+
+        // Render playlist
+        function renderPlaylist() {
+            playlistEl.innerHTML = '';
+            playlist.forEach((song, index) => {
+                const songEl = document.createElement('div');
+                songEl.className = `p-4 hover:bg-gray-800 cursor-pointer ${index === currentSongIndex ? 'bg-gray-800' : ''}`;
+                songEl.innerHTML = `
+                    <div class="font-medium">${song.title}</div>
+                    <div class="text-sm text-gray-400">${song.artist} • ${song.duration}</div>
+                `;
+                songEl.addEventListener('click', () => {
+                    currentSongIndex = index;
+                    loadSong();
+                    if (isPlaying) {
+                        playSong();
+                    }
+                    renderPlaylist();
+                });
+                playlistEl.appendChild(songEl);
+            });
+        }
+
+        // Load song
+        function loadSong() {
+            const song = playlist[currentSongIndex];
+            songTitle.textContent = song.title;
+            songArtist.textContent = song.artist;
+            duration.textContent = song.duration;
+            document.querySelector('.album-art').style.backgroundImage = `url('https://source.unsplash.com/random/600x600/?love,music,${encodeURIComponent(song.title)}')`;
+        }
+
+        // Play song
+        function playSong() {
+            isPlaying = true;
+            document.body.classList.add('playing');
+            playBtn.innerHTML = '<i class="fas fa-pause"></i>';
+            // In a real app, this would sync with partner via WebSocket
+        }
+
+        // Pause song
+        function pauseSong() {
+            isPlaying = false;
+            document.body.classList.remove('playing');
+            playBtn.innerHTML = '<i class="fas fa-play"></i>';
+        }
+
+        // Previous song
+        function prevSong() {
+            currentSongIndex--;
+            if (currentSongIndex < 0) {
+                currentSongIndex = playlist.length - 1;
+            }
+            loadSong();
+            if (isPlaying) {
+                playSong();
+            }
+            renderPlaylist();
+        }
+
+        // Next song
+        function nextSong() {
+            currentSongIndex++;
+            if (currentSongIndex > playlist.length - 1) {
+                currentSongIndex = 0;
+            }
+            loadSong();
+            if (isPlaying) {
+                playSong();
+            }
+            renderPlaylist();
+        }
+
+        // Event listeners
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                pauseSong();
+            } else {
+                playSong();
+            }
+        });
+
+        prevBtn.addEventListener('click', prevSong);
+        nextBtn.addEventListener('click', nextSong);
+
+        addSongBtn.addEventListener('click', () => {
+            const title = prompt("Enter song title:");
+            if (title) {
+                const artist = prompt("Enter artist name:");
+                if (artist) {
+                    playlist.push({
+                        title,
+                        artist,
+                        duration: "3:00" // Default duration
+                    });
+                    renderPlaylist();
+                }
+            }
+        });
+
+        // Initialize
+        loadSong();
+        renderPlaylist();
+
+        // Update progress bar (simulated)
+        setInterval(() => {
+            if (isPlaying) {
+                const currentValue = parseInt(progress.value);
+                if (currentValue < 100) {
+                    progress.value = currentValue + 1;
+                    const mins = Math.floor(currentValue * 0.03);
+                    const secs = Math.floor((currentValue * 0.03 % 1) * 60);
+                    currentTime.textContent = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+                } else {
+                    nextSong();
+                    progress.value = 0;
+                }
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

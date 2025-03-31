@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Date - Video Call</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 */
+            height: 0;
+            overflow: hidden;
+        }
+        .video-container video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .filter-rose {
+            filter: sepia(80%) hue-rotate(-25deg) saturate(300%);
+        }
+        .filter-midnight {
+            filter: brightness(0.7) contrast(1.2) hue-rotate(200deg);
+        }
+        .filter-sunset {
+            filter: hue-rotate(-20deg) saturate(1.5);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="flex flex-col h-screen">
+        <!-- Video Area -->
+        <div class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+            <div class="video-container rounded-xl overflow-hidden bg-black">
+                <video id="localVideo" autoplay muted class="filter-rose"></video>
+                <div class="absolute bottom-2 left-2 bg-black/50 px-2 py-1 rounded text-sm">
+                    You
+                </div>
+            </div>
+            <div class="video-container rounded-xl overflow-hidden bg-black">
+                <video id="remoteVideo" autoplay class="filter-rose"></video>
+                <div class="absolute bottom-2 left-2 bg-black/50 px-2 py-1 rounded text-sm">
+                    Partner
+                </div>
+            </div>
+        </div>
+
+        <!-- Control Bar -->
+        <div class="bg-gray-800 p-4 flex justify-center space-x-6">
+            <button id="toggleVideo" class="bg-white/10 hover:bg-white/20 p-3 rounded-full transition">
+                <i class="fas fa-video text-xl"></i>
+            </button>
+            <button id="toggleAudio" class="bg-white/10 hover:bg-white/20 p-3 rounded-full transition">
+                <i class="fas fa-microphone text-xl"></i>
+            </button>
+            <button id="shareScreen" class="bg-pink-600 hover:bg-pink-700 p-3 rounded-full transition">
+                <i class="fas fa-desktop text-xl"></i>
+            </button>
+            <div class="relative group">
+                <button id="filterBtn" class="bg-white/10 hover:bg-white/20 p-3 rounded-full transition">
+                    <i class="fas fa-magic text-xl"></i>
+                </button>
+                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-700 p-2 rounded-lg shadow-lg">
+                    <div class="grid grid-cols-3 gap-2">
+                        <button data-filter="none" class="p-2 bg-gray-600 rounded hover:bg-gray-500">None</button>
+                        <button data-filter="rose" class="p-2 bg-pink-600 rounded hover:bg-pink-500">Rose</button>
+                        <button data-filter="midnight" class="p-2 bg-blue-600 rounded hover:bg-blue-500">Midnight</button>
+                        <button data-filter="sunset" class="p-2 bg-orange-600 rounded hover:bg-orange-500">Sunset</button>
+                    </div>
+                </div>
+            </div>
+            <button id="endCall" class="bg-red-600 hover:bg-red-700 p-3 rounded-full transition">
+                <i class="fas fa-phone-slash text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Feature Navigation -->
+        <div class="bg-gray-800 p-2 flex justify-center space-x-4 border-t border-gray-700">
+            <button onclick="location.href='watch-party.html'" class="text-sm bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition">
+                <i class="fas fa-film mr-2"></i> Watch Party
+            </button>
+            <button onclick="location.href='music.html'" class="text-sm bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition">
+                <i class="fas fa-music mr-2"></i> Music
+            </button>
+            <button onclick="location.href='games.html'" class="text-sm bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition">
+                <i class="fas fa-gamepad mr-2"></i> Games
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Basic WebRTC setup would go here
+        document.querySelectorAll('[data-filter]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const filter = btn.dataset.filter;
+                document.querySelectorAll('video').forEach(video => {
+                    video.className = filter === 'none' ? '' : `filter-${filter}`;
+                });
+            });
+        });
+
+        document.getElementById('endCall').addEventListener('click', () => {
+            if (confirm('End this date?')) {
+                window.location.href = 'index.html';
+            }
+        });
+    </script>
+</body>
+</html>

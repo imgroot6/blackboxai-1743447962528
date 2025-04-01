@@ -50,31 +50,57 @@
             </div>
         </div>
 
-        <!-- Control Bar -->
+        <!-- Enhanced Control Bar -->
         <div class="bg-gray-800 p-4 flex justify-center space-x-6">
-            <button id="toggleVideo" class="bg-white/10 hover:bg-white/20 p-3 rounded-full transition">
+            <button id="toggleVideo" class="bg-blue-600 hover:bg-blue-700 p-3 rounded-full transition video-controls">
                 <i class="fas fa-video text-xl"></i>
             </button>
-            <button id="toggleAudio" class="bg-white/10 hover:bg-white/20 p-3 rounded-full transition">
+            <button id="toggleAudio" class="bg-blue-600 hover:bg-blue-700 p-3 rounded-full transition video-controls">
                 <i class="fas fa-microphone text-xl"></i>
             </button>
-            <button id="shareScreen" class="bg-pink-600 hover:bg-pink-700 p-3 rounded-full transition">
+            <button id="shareScreen" class="bg-blue-800 hover:bg-blue-900 p-3 rounded-full transition video-controls">
                 <i class="fas fa-desktop text-xl"></i>
             </button>
+            <button id="premiumBtn" class="bg-premium hover:bg-orange-600 p-3 rounded-full transition video-controls">
+                <i class="fas fa-crown text-xl"></i> Premium
+            </button>
+            
+            <!-- Enhanced Filter System -->
             <div class="relative group">
-                <button id="filterBtn" class="bg-white/10 hover:bg-white/20 p-3 rounded-full transition">
+                <button id="filterBtn" class="bg-white/10 hover:bg-white/20 p-3 rounded-full transition video-controls">
                     <i class="fas fa-magic text-xl"></i>
                 </button>
-                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-700 p-2 rounded-lg shadow-lg">
+                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-700 p-2 rounded-lg shadow-lg w-64">
                     <div class="grid grid-cols-3 gap-2">
                         <button data-filter="none" class="p-2 bg-gray-600 rounded hover:bg-gray-500">None</button>
                         <button data-filter="rose" class="p-2 bg-pink-600 rounded hover:bg-pink-500">Rose</button>
                         <button data-filter="midnight" class="p-2 bg-blue-600 rounded hover:bg-blue-500">Midnight</button>
                         <button data-filter="sunset" class="p-2 bg-orange-600 rounded hover:bg-orange-500">Sunset</button>
+                        <button data-filter="heart" class="p-2 bg-red-600 rounded hover:bg-red-500">Hearts</button>
+                        <button data-filter="vintage" class="p-2 bg-yellow-600 rounded hover:bg-yellow-500">Vintage</button>
+                        <button data-filter="bloom" class="p-2 bg-green-600 rounded hover:bg-green-500">Bloom</button>
+                        <button data-filter="moonlight" class="p-2 bg-purple-600 rounded hover:bg-purple-500">Moonlight</button>
+                        <button data-filter="golden" class="p-2 bg-yellow-500 rounded hover:bg-yellow-400">Golden</button>
                     </div>
                 </div>
             </div>
-            <button id="endCall" class="bg-red-600 hover:bg-red-700 p-3 rounded-full transition">
+
+            <!-- Game Launcher -->
+            <div class="relative group">
+                <button id="gameBtn" class="bg-white/10 hover:bg-white/20 p-3 rounded-full transition video-controls">
+                    <i class="fas fa-gamepad text-xl"></i>
+                </button>
+                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-700 p-2 rounded-lg shadow-lg w-48">
+                    <div class="space-y-2">
+                        <button onclick="launchGame('trivia')" class="w-full text-left px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded">Love Trivia</button>
+                        <button onclick="launchGame('memory')" class="w-full text-left px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded">Memory Match</button>
+                        <button onclick="launchGame('rather')" class="w-full text-left px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded">Would You Rather</button>
+                        <button onclick="launchGame('dare')" class="w-full text-left px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded">Truth or Dare</button>
+                    </div>
+                </div>
+            </div>
+
+            <button id="endCall" class="bg-red-600 hover:bg-red-700 p-3 rounded-full transition video-controls">
                 <i class="fas fa-phone-slash text-xl"></i>
             </button>
         </div>
@@ -94,21 +120,95 @@
     </div>
 
     <script>
-        // Basic WebRTC setup would go here
+        // Connect to Socket.io
+        const socket = io();
+        let currentPin = new URLSearchParams(window.location.search).get('pin');
+        
+        // Join room with PIN
+        if (currentPin) {
+            socket.emit('join-room', { 
+                pin: currentPin,
+                userId: localStorage.getItem('userId') || `user_${Math.random().toString(36).substr(2, 9)}`
+            });
+        }
+
+        // Enhanced Filter System
         document.querySelectorAll('[data-filter]').forEach(btn => {
             btn.addEventListener('click', () => {
                 const filter = btn.dataset.filter;
                 document.querySelectorAll('video').forEach(video => {
                     video.className = filter === 'none' ? '' : `filter-${filter}`;
                 });
+                // Sync filter with partner
+                socket.emit('apply-filter', { filter });
             });
         });
 
+        // Receive filter updates
+        socket.on('filter-applied', ({ filter }) => {
+            document.querySelectorAll('video').forEach(video => {
+                video.className = filter === 'none' ? '' : `filter-${filter}`;
+            });
+        });
+
+        // Game Launcher
+        function launchGame(gameType) {
+            // Show game in overlay
+            const gameContainer = document.createElement('div');
+            gameContainer.className = 'fixed inset-0 bg-black/80 z-50 flex items-center justify-center';
+            gameContainer.innerHTML = `
+                <div class="bg-gray-800 rounded-xl p-6 max-w-md w-full">
+                    <h3 class="text-xl font-bold mb-4">${gameType.replace(/-/g, ' ')}</h3>
+                    <div id="gameContent"></div>
+                    <button onclick="this.parentElement.parentElement.remove()" 
+                            class="mt-4 bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg">
+                        Close Game
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(gameContainer);
+            
+            // Initialize game based on type
+            switch(gameType) {
+                case 'trivia':
+                    initTriviaGame();
+                    break;
+                case 'memory':
+                    initMemoryGame();
+                    break;
+                case 'rather':
+                    initRatherGame();
+                    break;
+                case 'dare':
+                    initDareGame();
+                    break;
+            }
+        }
+
+        // End call handler
         document.getElementById('endCall').addEventListener('click', () => {
             if (confirm('End this date?')) {
+                socket.emit('leave-room');
                 window.location.href = 'index.html';
             }
         });
+
+        // User joined/left notifications
+        socket.on('user-joined', ({ userId }) => {
+            showNotification(`${userId} joined the date!`);
+        });
+
+        socket.on('user-left', ({ userId }) => {
+            showNotification(`${userId} left the date`);
+        });
+
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
     </script>
 </body>
 </html>

@@ -45,10 +45,18 @@ function initVideoCall() {
 // Set up WebRTC connection
 async function setupWebRTC() {
   try {
-    // Get local media stream
+    // Get local media stream with optimized constraints
     localStream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30 }
+      },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
     });
     
     // Display local video stream
@@ -106,74 +114,104 @@ async function createOffer() {
   }
 }
 
-// Toggle video stream
+// Toggle video stream with better state management
 function toggleVideo() {
   const videoTracks = localStream.getVideoTracks();
   if (videoTracks.length > 0) {
     const isEnabled = videoTracks[0].enabled;
     videoTracks[0].enabled = !isEnabled;
-    document.getElementById('toggleVideo').classList.toggle('bg-white/10');
-    document.getElementById('toggleVideo').classList.toggle('bg-pink-600');
+    
+    const toggleBtn = document.getElementById('toggleVideo');
+    toggleBtn.classList.toggle('bg-white/10');
+    toggleBtn.classList.toggle('bg-pink-600');
+    toggleBtn.innerHTML = isEnabled 
+      ? '<i class="fas fa-video-slash"></i>' 
+      : '<i class="fas fa-video"></i>';
+    
+    // Update UI for remote peer
+    socket.emit('video-state', { enabled: !isEnabled });
   }
 }
 
-// Toggle audio stream
+// Toggle audio stream with better state management
 function toggleAudio() {
   const audioTracks = localStream.getAudioTracks();
   if (audioTracks.length > 0) {
     const isEnabled = audioTracks[0].enabled;
     audioTracks[0].enabled = !isEnabled;
-    document.getElementById('toggleAudio').classList.toggle('bg-white/10');
-    document.getElementById('toggleAudio').classList.toggle('bg-pink-600');
+    
+    const toggleBtn = document.getElementById('toggleAudio');
+    toggleBtn.classList.toggle('bg-white/10');
+    toggleBtn.classList.toggle('bg-pink-600');
+    toggleBtn.innerHTML = isEnabled 
+      ? '<i class="fas fa-microphone-slash"></i>' 
+      : '<i class="fas fa-microphone"></i>';
+    
+    // Update UI for remote peer
+    socket.emit('audio-state', { enabled: !isEnabled });
   }
 }
 
-// Toggle screen sharing
+// Enhanced screen sharing with error handling
+let screenStream = null;
+
 async function toggleScreenShare() {
   try {
-    if (!localStream) return;
+    const shareBtn = document.getElementById('shareScreen');
+    const videoSender = peerConnection.getSenders().find(s => s.track?.kind === 'video');
     
-    const videoTrack = localStream.getVideoTracks()[0];
-    if (videoTrack.readyState === 'ended') {
-      // Currently not sharing screen, start sharing
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
+    if (!shareBtn.classList.contains('bg-green-600')) {
+      // Start screen sharing
+      screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: 'always' },
         audio: false
       });
       
       const screenTrack = screenStream.getVideoTracks()[0];
-      const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
+      await videoSender.replaceTrack(screenTrack);
       
-      if (sender) {
-        await sender.replaceTrack(screenTrack);
-        videoTrack.stop();
-        
-        screenTrack.onended = () => {
-          toggleScreenShare();
-        };
-        
-        document.getElementById('shareScreen').classList.add('bg-green-600');
-      }
+      // Update UI
+      shareBtn.classList.add('bg-green-600');
+      shareBtn.innerHTML = '<i class="fas fa-times"></i> Stop Sharing';
+      
+      // Handle when user stops sharing via browser UI
+      screenTrack.onended = () => {
+        stopScreenShare();
+      };
+      
     } else {
-      // Currently sharing screen, switch back to camera
-      const cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: false
-      });
-      
-      const cameraTrack = cameraStream.getVideoTracks()[0];
-      const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
-      
-      if (sender) {
-        await sender.replaceTrack(cameraTrack);
-        localStream.getVideoTracks()[0].stop();
-        
-        document.getElementById('shareScreen').classList.remove('bg-green-600');
-      }
+      // Stop screen sharing
+      await stopScreenShare();
     }
   } catch (error) {
-    console.error('Error toggling screen share:', error);
+    console.error('Screen sharing error:', error);
+    alert('Failed to share screen. Please try again.');
   }
+}
+
+async function stopScreenShare() {
+  const shareBtn = document.getElementById('shareScreen');
+  const videoSender = peerConnection.getSenders().find(s => s.track?.kind === 'video');
+  
+  // Get original camera stream
+  const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+  const cameraTrack = cameraStream.getVideoTracks()[0];
+  
+  // Replace screen track with camera track
+  await videoSender.replaceTrack(cameraTrack);
+  
+  // Stop screen tracks
+  if (screenStream) {
+    screenStream.getTracks().forEach(track => track.stop());
+    screenStream = null;
+  }
+  
+  // Update UI
+  shareBtn.classList.remove('bg-green-600');
+  shareBtn.innerHTML = '<i class="fas fa-desktop"></i> Share Screen';
+  
+  // Stop the unused camera track (we already have the original stream)
+  cameraTrack.stop();
 }
 
 // End the call

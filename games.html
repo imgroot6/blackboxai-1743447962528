@@ -183,7 +183,25 @@
         let flippedCards = [];
         let matchedPairs = 0;
 
-        // Start game
+        // Connect to Socket.io
+        const socket = io();
+        const currentPin = new URLSearchParams(window.location.search).get('pin');
+        let isHost = false;
+        
+        // Join game room
+        if (currentPin) {
+            socket.emit('join-room', { 
+                pin: currentPin,
+                type: 'game'
+            });
+            
+            // First to join becomes host
+            socket.on('room-status', ({ users }) => {
+                isHost = users.length === 1;
+            });
+        }
+
+        // Start game with multiplayer support
         function startGame(gameType) {
             currentGame = gameType;
             score = 0;
@@ -192,6 +210,11 @@
             document.querySelector('h1').classList.add('hidden');
             document.querySelector('.grid').classList.add('hidden');
             gameArea.classList.remove('hidden');
+            
+            // Only host can start games
+            if (isHost) {
+                socket.emit('game-start', { gameType });
+            }
             
             switch(gameType) {
                 case 'trivia':
@@ -209,6 +232,48 @@
             }
         }
 
+        // Receive game start events
+        socket.on('game-start', ({ gameType }) => {
+            if (!isHost) {
+                startGame(gameType);
+            }
+        });
+
+        // Sync game events
+        function sendGameEvent(event) {
+            if (isHost) {
+                socket.emit('game-event', event);
+            }
+        }
+
+        // Receive game updates
+        socket.on('game-update', (event) => {
+            switch(currentGame) {
+                case 'trivia':
+                    handleTriviaUpdate(event);
+                    break;
+                case 'memory':
+                    handleMemoryUpdate(event);
+                    break;
+                case 'rather':
+                    handleRatherUpdate(event);
+                    break;
+                case 'dare':
+                    handleDareUpdate(event);
+                    break;
+            }
+        });
+
+        // Example handler for memory game
+        function handleMemoryUpdate(event) {
+            if (event.type === 'card-flip') {
+                const card = document.querySelector(`[data-index="${event.index}"]`);
+                if (card && !card.classList.contains('flipped')) {
+                    card.classList.add('flipped');
+                }
+            }
+        }
+
         // Back to game selection
         backBtn.addEventListener('click', () => {
             gameArea.classList.add('hidden');
@@ -216,31 +281,34 @@
             document.querySelector('.grid').classList.remove('hidden');
         });
 
-        // Load Trivia Game
+        // Load Trivia Game with multiplayer support
         function loadTriviaGame() {
             gameContent.innerHTML = `
                 <div class="w-full max-w-md">
                     <div id="triviaQuestion" class="bg-gray-800 p-6 rounded-lg mb-6 text-xl"></div>
                     <div id="triviaOptions" class="space-y-3"></div>
+                    <div id="triviaScores" class="mt-4 bg-gray-800 p-3 rounded-lg hidden">
+                        <h4 class="font-bold mb-2">Team Scores</h4>
+                        <div id="scoresList"></div>
+                    </div>
                 </div>
             `;
             
             const questionEl = document.getElementById('triviaQuestion');
             const optionsEl = document.getElementById('triviaOptions');
+            const scoresContainer = document.getElementById('triviaScores');
+            const scoresList = document.getElementById('scoresList');
             let currentQuestion = 0;
+            let playerScores = {};
+            
+            // Only host controls question flow
+            if (isHost) {
+                showQuestion();
+            }
             
             function showQuestion() {
                 if (currentQuestion >= games.trivia.questions.length) {
-                    gameContent.innerHTML = `
-                        <div class="text-center">
-                            <h2 class="text-2xl font-bold mb-4">Game Over!</h2>
-                            <p class="text-xl mb-6">Your final score: ${score}/${games.trivia.questions.length}</p>
-                            ${score === games.trivia.questions.length ? createConfetti() : ''}
-                            <button onclick="startGame('trivia')" class="bg-pink-600 hover:bg-pink-700 px-6 py-3 rounded-lg">
-                                Play Again
-                            </button>
-                        </div>
-                    `;
+                    endTriviaGame();
                     return;
                 }
                 
@@ -253,35 +321,105 @@
                     button.className = 'w-full bg-gray-700 hover:bg-gray-600 p-4 rounded-lg text-left transition';
                     button.textContent = option;
                     button.addEventListener('click', () => {
-                        if (index === question.answer) {
-                            button.classList.add('bg-green-600');
-                            score++;
-                            scoreElement.textContent = score;
-                        } else {
-                            button.classList.add('bg-red-600');
+                        const isCorrect = index === question.answer;
+                        button.classList.add(isCorrect ? 'bg-green-600' : 'bg-red-600');
+                        
+                        // Send answer to host
+                        socket.emit('game-event', {
+                            type: 'trivia-answer',
+                            questionIndex: currentQuestion,
+                            isCorrect,
+                            playerId: socket.id
+                        });
+                        
+                        if (isHost) {
+                            processAnswer(isCorrect);
                         }
-                        setTimeout(() => {
-                            currentQuestion++;
-                            showQuestion();
-                        }, 1000);
                     });
                     optionsEl.appendChild(button);
                 });
             }
             
-            showQuestion();
+            function processAnswer(isCorrect) {
+                if (isCorrect) {
+                    score++;
+                    scoreElement.textContent = score;
+                }
+                
+                setTimeout(() => {
+                    currentQuestion++;
+                    if (isHost) {
+                        sendGameEvent({
+                            type: 'trivia-next',
+                            questionIndex: currentQuestion
+                        });
+                    }
+                    showQuestion();
+                }, 1000);
+            }
+            
+            function endTriviaGame() {
+                gameContent.innerHTML = `
+                    <div class="text-center">
+                        <h2 class="text-2xl font-bold mb-4">Game Over!</h2>
+                        <p class="text-xl mb-6">Team score: ${score}/${games.trivia.questions.length}</p>
+                        ${score === games.trivia.questions.length ? createConfetti() : ''}
+                        <button onclick="startGame('trivia')" class="bg-pink-600 hover:bg-pink-700 px-6 py-3 rounded-lg">
+                            Play Again
+                        </button>
+                    </div>
+                `;
+            }
+            
+            // Handle trivia updates
+            socket.on('game-update', (event) => {
+                if (event.type === 'trivia-next') {
+                    currentQuestion = event.questionIndex;
+                    if (!isHost) {
+                        showQuestion();
+                    }
+                } else if (event.type === 'trivia-score') {
+                    playerScores[event.playerId] = event.score;
+                    updateScoreboard();
+                }
+            });
+            
+            function updateScoreboard() {
+                scoresContainer.classList.remove('hidden');
+                scoresList.innerHTML = Object.entries(playerScores)
+                    .map(([id, score]) => `
+                        <div class="flex justify-between py-1">
+                            <span>Player ${id.slice(-4)}</span>
+                            <span>${score} pts</span>
+                        </div>
+                    `)
+                    .join('');
+            }
         }
 
-        // Load Memory Game
+        // Load Memory Game with multiplayer support
+        let memoryCards = [];
+        
         function loadMemoryGame() {
             // Duplicate cards to create pairs
-            const cards = [...games.memory.cards, ...games.memory.cards];
-            // Shuffle cards
-            cards.sort(() => Math.random() - 0.5);
+            memoryCards = [...games.memory.cards, ...games.memory.cards];
             
+            // Only host shuffles cards to keep game in sync
+            if (isHost) {
+                memoryCards.sort(() => Math.random() - 0.5);
+                sendGameEvent({
+                    type: 'init-memory',
+                    cards: memoryCards
+                });
+            }
+            
+            renderMemoryBoard();
+        }
+
+        function renderMemoryBoard() {
             gameContent.innerHTML = `
                 <div class="grid grid-cols-3 md:grid-cols-4 gap-4 w-full max-w-md">
-                    ${cards.map((card, index) => `
+                    ${memoryCards.map((card, index) => `
                         <div class="card aspect-square cursor-pointer" data-index="${index}" data-id="${card.id}">
                             <div class="card-face bg-pink-600 rounded-lg flex items-center justify-center text-4xl">
                                 <i class="fas fa-question"></i>
@@ -303,6 +441,10 @@
                     if (flippedCards.length < 2 && !card.classList.contains('flipped')) {
                         card.classList.add('flipped');
                         flippedCards.push(card);
+                        sendGameEvent({
+                            type: 'card-flip',
+                            index: card.dataset.index
+                        });
                         
                         if (flippedCards.length === 2) {
                             const [card1, card2] = flippedCards;
@@ -314,8 +456,8 @@
                                     setTimeout(() => {
                                         gameContent.innerHTML = `
                                             <div class="text-center">
-                                                <h2 class="text-2xl font-bold mb-4">You Win!</h2>
-                                                <p class="text-xl mb-6">You found all ${games.memory.cards.length} pairs!</p>
+                                                <h2 class="text-2xl font-bold mb-4">Team Win!</h2>
+                                                <p class="text-xl mb-6">You found all ${games.memory.cards.length} pairs together!</p>
                                                 ${createConfetti()}
                                                 <button onclick="startGame('memory')" class="bg-pink-600 hover:bg-pink-700 px-6 py-3 rounded-lg">
                                                     Play Again
@@ -339,21 +481,26 @@
             });
         }
 
-        // Load Would You Rather Game
+        function handleMemoryUpdate(event) {
+            if (event.type === 'init-memory') {
+                memoryCards = event.cards;
+                renderMemoryBoard();
+            } else if (event.type === 'card-flip') {
+                const card = document.querySelector(`[data-index="${event.index}"]`);
+                if (card && !card.classList.contains('flipped')) {
+                    card.classList.add('flipped');
+                }
+            }
+        }
+
+        // Load Would You Rather Game with multiplayer support
         function loadRatherGame() {
             let currentQuestion = 0;
+            let playerChoices = {};
             
             function showQuestion() {
                 if (currentQuestion >= games.rather.questions.length) {
-                    gameContent.innerHTML = `
-                        <div class="text-center">
-                            <h2 class="text-2xl font-bold mb-4">Game Over!</h2>
-                            <p class="text-xl mb-6">You answered all questions!</p>
-                            <button onclick="startGame('rather')" class="bg-pink-600 hover:bg-pink-700 px-6 py-3 rounded-lg">
-                                Play Again
-                            </button>
-                        </div>
-                    `;
+                    endRatherGame();
                     return;
                 }
                 
@@ -363,28 +510,122 @@
                             ${games.rather.questions[currentQuestion]}
                         </div>
                         <div class="flex justify-center space-x-4">
-                            <button class="choice bg-green-600 hover:bg-green-700 px-6 py-3 rounded-lg">
+                            <button class="choice bg-green-600 hover:bg-green-700 px-6 py-3 rounded-lg" data-choice="1">
                                 Option 1
                             </button>
-                            <button class="choice bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg">
+                            <button class="choice bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg" data-choice="2">
                                 Option 2
                             </button>
+                        </div>
+                        <div id="ratherResults" class="mt-6 bg-gray-800 p-4 rounded-lg hidden">
+                            <h4 class="font-bold mb-2">Group Choices</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <h5 class="text-green-400">Option 1</h5>
+                                    <div id="option1Count" class="text-2xl font-bold">0</div>
+                                </div>
+                                <div>
+                                    <h5 class="text-blue-400">Option 2</h5>
+                                    <div id="option2Count" class="text-2xl font-bold">0</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 `;
                 
                 document.querySelectorAll('.choice').forEach(button => {
                     button.addEventListener('click', () => {
-                        currentQuestion++;
-                        showQuestion();
+                        const choice = button.dataset.choice;
+                        playerChoices[socket.id] = choice;
+                        
+                        // Send choice to host
+                        socket.emit('game-event', {
+                            type: 'rather-choice',
+                            questionIndex: currentQuestion,
+                            choice,
+                            playerId: socket.id
+                        });
+                        
+                        if (isHost) {
+                            processChoice();
+                        }
                     });
                 });
             }
             
-            showQuestion();
+            function processChoice() {
+                const results = document.getElementById('ratherResults');
+                const option1Count = document.getElementById('option1Count');
+                const option2Count = document.getElementById('option2Count');
+                
+                results.classList.remove('hidden');
+                
+                const choices = Object.values(playerChoices);
+                const count1 = choices.filter(c => c === '1').length;
+                const count2 = choices.filter(c => c === '2').length;
+                
+                option1Count.textContent = count1;
+                option2Count.textContent = count2;
+                
+                if (isHost) {
+                    setTimeout(() => {
+                        currentQuestion++;
+                        playerChoices = {};
+                        sendGameEvent({
+                            type: 'rather-next',
+                            questionIndex: currentQuestion
+                        });
+                        showQuestion();
+                    }, 3000);
+                }
+            }
+            
+            function endRatherGame() {
+                gameContent.innerHTML = `
+                    <div class="text-center">
+                        <h2 class="text-2xl font-bold mb-4">Game Over!</h2>
+                        <p class="text-xl mb-6">You've explored all dilemmas together!</p>
+                        <button onclick="startGame('rather')" class="bg-pink-600 hover:bg-pink-700 px-6 py-3 rounded-lg">
+                            Play Again
+                        </button>
+                    </div>
+                `;
+            }
+            
+            // Handle rather updates
+            socket.on('game-update', (event) => {
+                if (event.type === 'rather-next') {
+                    currentQuestion = event.questionIndex;
+                    if (!isHost) {
+                        showQuestion();
+                    }
+                } else if (event.type === 'rather-choice') {
+                    playerChoices[event.playerId] = event.choice;
+                    if (isHost) {
+                        processChoice();
+                    }
+                }
+            });
+            
+            if (isHost) {
+                showQuestion();
+            } else {
+                gameContent.innerHTML = `
+                    <div class="text-center py-8">
+                        <div class="animate-pulse text-xl mb-4">
+                            Waiting for host to start the game...
+                        </div>
+                        <div class="flex justify-center">
+                            <div class="w-8 h-8 bg-pink-600 rounded-full animate-bounce mx-1"></div>
+                            <div class="w-8 h-8 bg-pink-600 rounded-full animate-bounce mx-1" style="animation-delay: 0.2s"></div>
+                            <div class="w-8 h-8 bg-pink-600 rounded-full animate-bounce mx-1" style="animation-delay: 0.4s"></div>
+                        </div>
+                    </div>
+                `;
+            }
         }
 
-        // Load Truth or Dare Game
+        // Load Truth or Dare Game with multiplayer support
         function loadDareGame() {
             gameContent.innerHTML = `
                 <div class="w-full max-w-md text-center">
@@ -401,9 +642,14 @@
                     </div>
                     <div id="challengeDisplay" class="bg-gray-800 p-6 rounded-lg hidden">
                         <p id="challengeText" class="text-xl mb-4"></p>
+                        <div id="playerTurn" class="text-sm text-gray-400 mb-2"></div>
                         <button id="nextBtn" class="bg-pink-600 hover:bg-pink-700 px-6 py-3 rounded-lg">
-                            Next Challenge
+                            Next Player
                         </button>
+                    </div>
+                    <div id="playerList" class="mt-4 bg-gray-800 p-3 rounded-lg">
+                        <h4 class="font-bold mb-2">Players</h4>
+                        <div id="players" class="space-y-1"></div>
                     </div>
                 </div>
             `;
@@ -413,21 +659,104 @@
             const challengeDisplay = document.getElementById('challengeDisplay');
             const challengeText = document.getElementById('challengeText');
             const nextBtn = document.getElementById('nextBtn');
+            const playerTurn = document.getElementById('playerTurn');
+            const playersList = document.getElementById('players');
+            let currentPlayerIndex = 0;
+            let playerOrder = [];
+            
+            // Initialize player order
+            socket.on('room-status', ({ users }) => {
+                playerOrder = users;
+                updatePlayerList();
+                
+                // Start with first player if host
+                if (isHost && playerOrder.length > 0) {
+                    nextPlayer();
+                }
+            });
+            
+            function updatePlayerList() {
+                playersList.innerHTML = playerOrder
+                    .map((id, index) => `
+                        <div class="flex items-center ${index === currentPlayerIndex ? 'text-pink-400' : ''}">
+                            <i class="fas fa-user mr-2"></i>
+                            <span>Player ${id.slice(-4)}</span>
+                        </div>
+                    `)
+                    .join('');
+            }
+            
+            function nextPlayer() {
+                currentPlayerIndex = (currentPlayerIndex + 1) % playerOrder.length;
+                updatePlayerList();
+                
+                if (isHost) {
+                    sendGameEvent({
+                        type: 'dare-turn',
+                        playerIndex: currentPlayerIndex
+                    });
+                }
+            }
             
             truthBtn.addEventListener('click', () => {
-                const randomTruth = games.dare.truths[Math.floor(Math.random() * games.dare.truths.length)];
-                challengeText.textContent = randomTruth;
-                challengeDisplay.classList.remove('hidden');
+                if (playerOrder[currentPlayerIndex] === socket.id) {
+                    const randomTruth = games.dare.truths[Math.floor(Math.random() * games.dare.truths.length)];
+                    challengeText.textContent = randomTruth;
+                    playerTurn.textContent = `Your turn!`;
+                    challengeDisplay.classList.remove('hidden');
+                    
+                    if (isHost) {
+                        sendGameEvent({
+                            type: 'dare-challenge',
+                            challenge: randomTruth,
+                            isTruth: true
+                        });
+                    }
+                }
             });
             
             dareBtn.addEventListener('click', () => {
-                const randomDare = games.dare.dares[Math.floor(Math.random() * games.dare.dares.length)];
-                challengeText.textContent = randomDare;
-                challengeDisplay.classList.remove('hidden');
+                if (playerOrder[currentPlayerIndex] === socket.id) {
+                    const randomDare = games.dare.dares[Math.floor(Math.random() * games.dare.dares.length)];
+                    challengeText.textContent = randomDare;
+                    playerTurn.textContent = `Your turn!`;
+                    challengeDisplay.classList.remove('hidden');
+                    
+                    if (isHost) {
+                        sendGameEvent({
+                            type: 'dare-challenge',
+                            challenge: randomDare,
+                            isTruth: false
+                        });
+                    }
+                }
             });
             
             nextBtn.addEventListener('click', () => {
                 challengeDisplay.classList.add('hidden');
+                if (isHost) {
+                    nextPlayer();
+                }
+            });
+            
+            // Handle dare updates
+            socket.on('game-update', (event) => {
+                if (event.type === 'dare-turn') {
+                    currentPlayerIndex = event.playerIndex;
+                    updatePlayerList();
+                    
+                    if (playerOrder[currentPlayerIndex] === socket.id) {
+                        playerTurn.textContent = `Your turn!`;
+                    } else {
+                        playerTurn.textContent = `Waiting for Player ${playerOrder[currentPlayerIndex].slice(-4)}...`;
+                    }
+                } else if (event.type === 'dare-challenge') {
+                    challengeText.textContent = event.challenge;
+                    playerTurn.textContent = event.isTruth ? 
+                        `Player ${playerOrder[currentPlayerIndex].slice(-4)}'s Truth:` :
+                        `Player ${playerOrder[currentPlayerIndex].slice(-4)}'s Dare:`;
+                    challengeDisplay.classList.remove('hidden');
+                }
             });
         }
 

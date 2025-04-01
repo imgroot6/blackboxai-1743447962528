@@ -102,13 +102,37 @@
         const sendBtn = document.getElementById('sendBtn');
         const chatMessages = document.getElementById('chatMessages');
 
-        // Video controls
+        // Connect to Socket.io
+        const socket = io();
+        const currentPin = new URLSearchParams(window.location.search).get('pin');
+        
+        // Join watch party room
+        if (currentPin) {
+            socket.emit('join-room', { 
+                pin: currentPin,
+                type: 'watch-party'
+            });
+        }
+
+        // Video controls with synchronization
         video.addEventListener('play', () => {
             playPauseBtn.innerHTML = '<i class="fas fa-pause"></i> Pause';
+            // Sync play state with partner
+            socket.emit('sync-playback', {
+                time: video.currentTime,
+                state: 'play',
+                mediaId: video.currentSrc
+            });
         });
 
         video.addEventListener('pause', () => {
             playPauseBtn.innerHTML = '<i class="fas fa-play"></i> Play';
+            // Sync pause state with partner
+            socket.emit('sync-playback', {
+                time: video.currentTime,
+                state: 'pause',
+                mediaId: video.currentSrc
+            });
         });
 
         playPauseBtn.addEventListener('click', () => {
@@ -118,6 +142,34 @@
                 video.pause();
             }
         });
+
+        // Receive playback updates
+        socket.on('playback-update', ({ time, state, mediaId }) => {
+            if (video.currentSrc !== mediaId) return;
+            
+            // Smooth seek to avoid jumps
+            const timeDiff = Math.abs(video.currentTime - time);
+            if (timeDiff > 0.5) {
+                video.currentTime = time;
+            }
+            
+            if (state === 'play' && video.paused) {
+                video.play();
+            } else if (state === 'pause' && !video.paused) {
+                video.pause();
+            }
+        });
+
+        // Sync time every 5 seconds
+        setInterval(() => {
+            if (!video.paused) {
+                socket.emit('sync-playback', {
+                    time: video.currentTime,
+                    state: 'play',
+                    mediaId: video.currentSrc
+                });
+            }
+        }, 5000);
 
         // Update progress bar
         video.addEventListener('timeupdate', () => {
